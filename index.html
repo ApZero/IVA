@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="es-PY">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Libro IVA</title>
+<meta name="description" content="Registro de ingresos y egresos para cálculo de IVA en Paraguay">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#2F4538">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Libro IVA">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
+<style>
+:root{
+  --paper:#F3ECDC;
+  --line:#D9CCA8;
+  --ink:#2B2A26;
+  --ink-soft:#746C5A;
+  --verde-oscuro:#2F4538;
+  --verde-medio:#3F6B4F;
+  --verde-claro:#E4ECE2;
+  --terracota:#B6502F;
+  --terracota-claro:#F4E3D8;
+  --bronce:#B68B3C;
+  --rojo:#9B3A2E;
+  --rojo-claro:#F3DFDB;
+  --white:#FFFDF6;
+  --font-serif:Georgia,'Iowan Old Style','Palatino Linotype',serif;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,'SF Mono','Cascadia Mono','DejaVu Sans Mono','Courier New',monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;}
+body{
+  font-family:var(--font-sans);
+  color:var(--ink);
+  background:var(--verde-oscuro);
+  -webkit-tap-highlight-color:transparent;
+  overscroll-behavior:none;
+}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+#app{
+  max-width:480px;
+  margin:0 auto;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:var(--paper);
+  position:relative;
+}
+
+/* ---------- Topbar ---------- */
+.topbar{
+  flex:0 0 auto;
+  background:var(--verde-oscuro);
+  color:var(--white);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 14px;
+  padding-top:max(14px, env(safe-area-inset-top));
+  border-bottom:2px solid var(--bronce);
+}
+.brand{font-family:var(--font-serif);font-weight:700;font-size:19px;letter-spacing:.3px;}
+.brand .sub{display:block;font-family:var(--font-sans);font-weight:400;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--bronce);margin-top:1px;}
+.icon-btn{
+  background:transparent;border:none;color:var(--white);font-size:20px;
+  width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.icon-btn:active{background:rgba(255,255,255,.12);}
+#btn-install{display:none;}
+
+/* ---------- Main / ledger paper ---------- */
+main{
+  flex:1 1 auto;
+  overflow-y:auto;
+  position:relative;
+  background-image:repeating-linear-gradient(to bottom, transparent, transparent 26px, var(--line) 26px, var(--line) 27px);
+  padding-bottom:24px;
+}
+main::before{
+  content:"";
+  position:absolute;top:0;bottom:0;left:26px;width:1px;
+  background:rgba(155,58,46,.32);
+  pointer-events:none;
+}
+.view{display:none;padding:16px 14px 16px 38px;}
+.view.active{display:block;}
+
+h2{font-family:var(--font-serif);font-size:18px;margin:4px 0 12px;color:var(--verde-oscuro);}
+h3{font-family:var(--font-serif);font-size:15px;margin:18px 0 8px;color:var(--ink-soft);}
+.hint{font-size:12.5px;color:var(--ink-soft);line-height:1.4;margin:4px 0 12px;}
+.hint.small{font-size:11px;margin-top:18px;}
+
+/* ---------- Segmented controls ---------- */
+.seg-control{display:flex;border:1.5px solid var(--verde-oscuro);border-radius:10px;overflow:hidden;margin-bottom:14px;background:var(--white);}
+.seg-btn{
+  flex:1;border:none;background:transparent;padding:10px 6px;font-size:14px;font-weight:600;
+  color:var(--verde-oscuro);cursor:pointer;border-right:1px solid var(--line);
+  font-family:var(--font-sans);
+}
+.seg-btn:last-child{border-right:none;}
+.seg-btn.active{background:var(--verde-oscuro);color:var(--white);}
+.seg-btn.ingreso.active{background:var(--verde-medio);}
+.seg-btn.egreso.active{background:var(--terracota);}
+
+/* ---------- Form fields ---------- */
+.entry-card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.field{display:block;margin-bottom:14px;}
+.field>span{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);margin-bottom:2px;}
+input[type=text],input[type=number],input[type=date],input[type=month],select,textarea{
+  width:100%;background:transparent;border:none;border-bottom:1.5px dashed var(--ink-soft);
+  padding:8px 2px;font-size:16px;color:var(--ink);font-family:inherit;border-radius:0;
+}
+select{font-family:var(--font-sans);-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%), linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);background-position:calc(100% - 14px) center, calc(100% - 9px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+input:focus,select:focus,textarea:focus{outline:none;border-bottom:1.5px solid var(--bronce);}
+input[type=number]{font-family:var(--font-mono);}
+input::placeholder{color:#B7AE98;}
+
+.calc-box{background:var(--paper);border:1px dashed var(--bronce);border-radius:10px;padding:10px 12px;margin-bottom:14px;}
+.calc-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:14.5px;}
+.calc-row + .calc-row{border-top:1px dotted var(--line);}
+.link-btn{background:none;border:none;color:var(--bronce);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-left:6px;font-family:var(--font-sans);}
+#calc-iva-input{max-width:140px;text-align:right;border-bottom:1.5px solid var(--bronce);}
+
+.btn-primary,.btn-secondary,.btn-danger{
+  display:inline-block;width:100%;text-align:center;padding:12px;border-radius:9px;font-size:15px;font-weight:700;
+  cursor:pointer;margin-top:4px;font-family:var(--font-sans);border:1.5px solid transparent;
+}
+.btn-primary{background:var(--verde-oscuro);color:var(--white);}
+.btn-primary:active{background:#243a2e;}
+.btn-secondary{background:var(--white);color:var(--verde-oscuro);border-color:var(--verde-oscuro);}
+.btn-danger{background:var(--white);color:var(--rojo);border-color:var(--rojo);}
+.btn-secondary.small,.btn-danger.small{width:auto;padding:8px 14px;font-size:13px;display:inline-block;margin-right:8px;}
+.file-label{display:block;text-align:center;}
+.hidden{display:none !important;}
+
+/* ---------- Lists / ledger rows ---------- */
+.list-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.list-header input[type=month]{flex:1;}
+.nav-arrow{background:var(--white);border:1px solid var(--line);border-radius:6px;width:32px;height:32px;font-size:14px;color:var(--verde-oscuro);cursor:pointer;flex:0 0 auto;}
+.list-count{font-size:12px;color:var(--ink-soft);white-space:nowrap;}
+
+.ledger-list{display:flex;flex-direction:column;}
+.ledger-row{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:10px 8px;border-bottom:1px dashed var(--line);border-left:3px solid transparent;cursor:pointer;background:var(--white);
+}
+.ledger-row:active{background:var(--paper);}
+.ledger-row.ingreso{border-left-color:var(--verde-medio);}
+.ledger-row.egreso{border-left-color:var(--terracota);}
+.row-main{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.row-date{font-size:11px;color:var(--ink-soft);font-family:var(--font-mono);}
+.row-place{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+.row-sub{font-size:11.5px;color:var(--ink-soft);}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:20px;background:var(--paper);color:var(--ink-soft);border:1px solid var(--line);width:fit-content;margin-top:1px;}
+.row-amounts{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:0 0 auto;}
+.row-monto{font-size:15px;font-weight:700;}
+.row-iva{font-size:11px;color:var(--ink-soft);}
+.empty-state{text-align:center;color:var(--ink-soft);font-size:13px;padding:30px 10px;}
+
+/* ---------- Resumen ---------- */
+.period-picker{display:flex;gap:10px;margin-bottom:16px;align-items:center;}
+.period-picker input,.period-picker select{flex:1;}
+.cards-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;}
+.card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+.card span{display:block;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.card strong{font-size:17px;}
+.card.ingreso strong{color:var(--verde-medio);}
+.card.egreso strong{color:var(--terracota);}
+.card.wide{grid-column:1 / -1;}
+.card.highlight{grid-column:1 / -1;background:var(--rojo-claro);border-color:var(--rojo);}
+.card.highlight.credito{background:var(--verde-claro);border-color:var(--verde-medio);}
+.card.highlight strong{font-size:22px;color:var(--rojo);}
+.card.highlight.credito strong{color:var(--verde-medio);}
+
+table.ledger-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:10px;background:var(--white);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+table.ledger-table th,table.ledger-table td{padding:7px 6px;text-align:right;border-bottom:1px dotted var(--line);}
+table.ledger-table th:first-child,table.ledger-table td:first-child{text-align:left;}
+table.ledger-table thead th{background:var(--paper);font-weight:700;color:var(--verde-oscuro);border-bottom:1.5px solid var(--bronce);}
+table.ledger-table tfoot td{font-weight:700;border-top:1.5px solid var(--bronce);border-bottom:none;}
+
+/* ---------- Impuestos / Contador rows ---------- */
+.inline-form{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px;}
+.period-card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;}
+.period-card .period-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.period-card .period-head .pname{font-family:var(--font-serif);font-weight:700;font-size:15px;color:var(--verde-oscuro);text-transform:capitalize;}
+.period-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.period-row .lbl{color:var(--ink-soft);}
+.period-row.pendiente .val{font-weight:700;color:var(--rojo);}
+.period-row.afavor .val{font-weight:700;color:var(--verde-medio);}
+.pago-mini{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-soft);padding:3px 0 3px 10px;border-left:2px solid var(--line);margin-top:4px;}
+.pago-mini button{background:none;border:none;color:var(--rojo);font-size:11px;cursor:pointer;text-decoration:underline;}
+
+.contador-row{display:flex;align-items:center;gap:10px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.contador-row .cmonth{flex:0 0 88px;font-family:var(--font-serif);font-weight:700;font-size:13.5px;color:var(--verde-oscuro);text-transform:capitalize;}
+.contador-row .camount{flex:1;min-width:0;}
+.contador-row .camount input{border-bottom:1.5px dashed var(--ink-soft);text-align:right;}
+.contador-row.pagado{background:var(--verde-claro);}
+.check-pill{flex:0 0 auto;width:42px;height:26px;border-radius:14px;border:1.5px solid var(--ink-soft);position:relative;cursor:pointer;background:var(--paper);}
+.check-pill::after{content:"";position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:var(--white);transition:left .15s;}
+.check-pill.on{border-color:var(--verde-medio);background:var(--verde-medio);}
+.check-pill.on::after{left:20px;}
+.cdate{flex:0 0 92px;}
+.cdate input{font-size:11.5px;}
+
+/* ---------- Tabbar ---------- */
+.tabbar{
+  flex:0 0 auto;display:flex;background:var(--verde-oscuro);border-top:2px solid var(--bronce);
+  padding-bottom:max(0px, env(safe-area-inset-bottom));
+}
+.tab-btn{
+  flex:1;background:transparent;border:none;color:#B9C2BA;padding:8px 2px 9px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;font-family:var(--font-sans);
+  border-top:2px solid transparent;margin-top:-2px;
+}
+.tab-btn .tab-icon{font-size:19px;}
+.tab-btn.active{color:var(--white);border-top-color:var(--bronce);}
+
+/* ---------- Modal ---------- */
+.modal-overlay{position:fixed;inset:0;background:rgba(20,20,15,.55);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+.modal-overlay.hidden{display:none;}
+.modal-card{background:var(--paper);width:100%;max-width:480px;max-height:86vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:16px 18px 30px;box-shadow:0 -2px 20px rgba(0,0,0,.3);}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.modal-head h2{margin:0;}
+.modal-body section{margin-bottom:18px;}
+.modal-body section:last-child{margin-bottom:0;}
+
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--verde-oscuro);color:var(--white);padding:10px 18px;border-radius:30px;font-size:13px;border:1px solid var(--bronce);opacity:0;transition:opacity .2s, transform .2s;z-index:100;pointer-events:none;max-width:85%;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+@media (min-width:480px){
+  body{padding:0;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">📒 Libro IVA<span class="sub">Filadelfia · Chaco PY</span></div>
+    <div style="display:flex;gap:4px;">
+      <button class="icon-btn" id="btn-install" title="Instalar app">⬇️</button>
+      <button class="icon-btn" id="btn-ajustes" aria-label="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ===================== REGISTRO ===================== -->
+    <section id="view-registro" class="view active">
+      <div class="entry-card">
+        <div class="seg-control" id="tipo-toggle">
+          <button type="button" data-tipo="ingreso" class="seg-btn ingreso active">↗ Ingreso</button>
+          <button type="button" data-tipo="egreso" class="seg-btn egreso">↙ Egreso</button>
+        </div>
+
+        <form id="form-entry">
+          <input type="hidden" id="entry-id">
+
+          <label class="field">
+            <span>Fecha</span>
+            <input type="date" id="entry-fecha" required>
+          </label>
+
+          <label class="field">
+            <span id="entry-lugar-label">Lugar / razón social</span>
+            <input type="text" id="entry-lugar" list="lugares-list" placeholder="Ej: Supermercado Salemma" autocomplete="off" required>
+            <datalist id="lugares-list"></datalist>
+          </label>
+
+          <label class="field">
+            <span>Descripción (opcional)</span>
+            <input type="text" id="entry-desc" placeholder="Ej: compra de mercadería">
+          </label>
+
+          <label class="field">
+            <span>N° de factura / timbrado (opcional)</span>
+            <input type="text" id="entry-factura" placeholder="001-001-0000001">
+          </label>
+
+          <label class="field">
+            <span>Monto total (Gs.)</span>
+            <input type="number" id="entry-monto" inputmode="decimal" min="0" step="1" placeholder="0" required>
+          </label>
+
+          <div class="field">
+            <span>Tasa de IVA</span>
+            <div class="seg-control" id="rate-toggle">
+              <button type="button" data-rate="10" class="seg-btn active">10%</button>
+              <button type="button" data-rate="5" class="seg-btn">5%</button>
+              <button type="button" data-rate="0" class="seg-btn">Exenta</button>
+            </div>
+          </div>
+
+          <div class="calc-box">
+            <div class="calc-row">
+              <span>Gravada</span>
+              <span class="num" id="calc-gravada">₲ 0</span>
+            </div>
+            <div class="calc-row">
+              <span>IVA <button type="button" id="btn-manual-iva" class="link-btn">editar</button></span>
+              <span class="num" id="calc-iva-display">₲ 0</span>
+              <input type="number" id="calc-iva-input" class="num hidden" min="0" step="1">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btn-guardar">Guardar</button>
+          <button type="button" class="btn-danger hidden" id="btn-eliminar-entry" style="margin-top:8px;">Eliminar este registro</button>
+          <button type="button" class="btn-secondary hidden" id="btn-cancelar-edit" style="margin-top:8px;">Cancelar edición</button>
+        </form>
+      </div>
+
+      <div class="list-header">
+        <button class="nav-arrow" id="reg-mes-prev">‹</button>
+        <input type="month" id="registro-mes-filtro">
+        <button class="nav-arrow" id="reg-mes-next">›</button>
+      </div>
+      <div class="list-count" id="registro-count" style="margin-bottom:8px;"></div>
+      <div id="registro-list" class="ledger-list"></div>
+    </section>
+
+    <!-- ===================== RESUMEN ===================== -->
+    <section id="view-resumen" class="view">
+      <h2>Resumen de IVA</h2>
+      <div class="seg-control" id="resumen-modo-toggle">
+        <button type="button" data-modo="mes" class="seg-btn active">Por mes</button>
+        <button type="button" data-modo="anio" class="seg-btn">Por año</button>
+      </div>
+      <div class="period-picker">
+        <input type="month" id="resumen-mes">
+        <select id="resumen-anio" class="hidden"></select>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card ingreso"><span>Ingresos</span><strong class="num" id="r-ingresos">₲ 0</strong></div>
+        <div class="card egreso"><span>Egresos</span><strong class="num" id="r-egresos">₲ 0</strong></div>
+        <div class="card"><span>IVA en contra (débito)</span><strong class="num" id="r-debito">₲ 0</strong></div>
+        <div class="card"><span>IVA a favor (crédito)</span><strong class="num" id="r-credito">₲ 0</strong></div>
+        <div class="card"><span>Crédito anterior aplicado</span><strong class="num" id="r-saldo-usado">₲ 0</strong></div>
+        <div class="card"><span>Saldo a favor restante</span><strong class="num" id="r-saldo-restante">₲ 0</strong></div>
+        <div class="card highlight" id="r-apagar-card">
+          <span id="r-apagar-label">IVA a pagar</span>
+          <strong class="num" id="r-apagar">₲ 0</strong>
+        </div>
+      </div>
+
+      <h3>Detalle por tasa</h3>
+      <table class="ledger-table">
+        <thead>
+          <tr><th>Tasa</th><th>Ingr. grav.</th><th>IVA</th><th>Egr. grav.</th><th>IVA</th></tr>
+        </thead>
+        <tbody id="resumen-breakdown-body"></tbody>
+      </table>
+      <p class="hint">El IVA del 5% se calcula dividiendo el monto total entre 21 (no entre 6). Si tu contador usa otro criterio, podés editar el IVA manualmente en cada registro.</p>
+    </section>
+
+    <!-- ===================== IMPUESTOS ===================== -->
+    <section id="view-impuestos" class="view">
+      <h2>Pagos de IVA a la SET</h2>
+      <form id="form-pago-iva" class="inline-form">
+        <label class="field"><span>Período</span><input type="month" id="pago-periodo" required></label>
+        <label class="field"><span>Monto pagado (Gs.)</span><input type="number" id="pago-monto" min="0" step="1" required></label>
+        <label class="field"><span>Fecha de pago</span><input type="date" id="pago-fecha" required></label>
+        <label class="field"><span>Nota (opcional)</span><input type="text" id="pago-nota" placeholder="Ej: Formulario 211"></label>
+        <button type="submit" class="btn-primary">Registrar pago</button>
+      </form>
+      <div id="impuestos-list"></div>
+    </section>
+
+    <!-- ===================== CONTADOR ===================== -->
+    <section id="view-contador" class="view">
+      <h2>Pago al contador</h2>
+      <div class="entry-card">
+        <label class="field">
+          <span>Honorario mensual por defecto (Gs.)</span>
+          <input type="number" id="contador-fee-default" min="0" step="1" placeholder="0">
+        </label>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <label class="field" style="flex:1;margin-bottom:0;">
+            <span>Agregar mes</span>
+            <input type="month" id="contador-nuevo-mes">
+          </label>
+          <button type="button" class="btn-secondary small" id="btn-agregar-mes-contador" style="margin-bottom:1px;">+ Agregar</button>
+        </div>
+      </div>
+      <div id="contador-list"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-view="registro"><span class="tab-icon">📝</span><span>Registro</span></button>
+    <button class="tab-btn" data-view="resumen"><span class="tab-icon">📊</span><span>Resumen</span></button>
+    <button class="tab-btn" data-view="impuestos"><span class="tab-icon">🏛️</span><span>IVA</span></button>
+    <button class="tab-btn" data-view="contador"><span class="tab-icon">🧮</span><span>Contador</span></button>
+  </nav>
+
+</div>
+
+<!-- ===================== MODAL AJUSTES ===================== -->
+<div id="modal-ajustes" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2>Ajustes y respaldo</h2><button class="icon-btn" id="btn-cerrar-ajustes">✕</button></div>
+    <div class="modal-body">
+      <section>
+        <h3>Respaldo</h3>
+        <p class="hint">Todos los datos se guardan únicamente en este celular. Exportá un respaldo de vez en cuando — si cambiás de equipo o desinstalás la app, es la única forma de recuperar tu historial.</p>
+        <button class="btn-primary" id="btn-export-json">⬇ Exportar respaldo (.json)</button>
+        <label class="btn-secondary file-label" style="margin-top:8px;">⬆ Importar respaldo (.json)
+          <input type="file" id="input-import-json" accept="application/json" hidden>
+        </label>
+        <button class="btn-secondary" id="btn-export-csv" style="margin-top:8px;">⬇ Exportar registro (.csv)</button>
+      </section>
+      <section>
+        <h3>Datos</h3>
+        <button class="btn-danger" id="btn-clear-all">Borrar todos los datos</button>
+      </section>
+      <p class="hint small">Libro IVA es una herramienta de seguimiento personal y no reemplaza el asesoramiento de tu contador. Verificá siempre los montos finales antes de presentar tus declaraciones ante la SET.</p>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   STORAGE
+   ============================================================ */
+const KEYS = {
+  TX:'libroiva_tx', PLACES_IN:'libroiva_places_in', PLACES_OUT:'libroiva_places_out',
+  PAGOS:'libroiva_pagos_iva', CONTADOR:'libroiva_contador', SETTINGS:'libroiva_settings'
+};
+function lsGet(key, fallback){
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
+}
+function lsSet(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ toast('No se pudo guardar (almacenamiento lleno?)'); } }
+
+let tx        = lsGet(KEYS.TX, []);
+let placesIn  = lsGet(KEYS.PLACES_IN, []);
+let placesOut = lsGet(KEYS.PLACES_OUT, []);
+let pagosIVA  = lsGet(KEYS.PAGOS, []);
+let contador  = lsGet(KEYS.CONTADOR, { fee:0, entries:{} });
+let settings  = lsGet(KEYS.SETTINGS, {});
+
+function saveTx(){ lsSet(KEYS.TX, tx); }
+function savePlaces(){ lsSet(KEYS.PLACES_IN, placesIn); lsSet(KEYS.PLACES_OUT, placesOut); }
+function savePagos(){ lsSet(KEYS.PAGOS, pagosIVA); }
+function saveContador(){ lsSet(KEYS.CONTADOR, contador); }
+function saveSettings(){ lsSet(KEYS.SETTINGS, settings); }
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function currentPeriod(){ return todayStr().slice(0,7); }
+function periodOf(dateStr){ return (dateStr||'').slice(0,7); }
+function fmtGs(n){ const v = Math.round(Number(n)||0); return '₲ ' + v.toLocaleString('es-PY'); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function calcIVA(monto, rate){ monto = Number(monto)||0; if(rate===10) return monto/11; if(rate===5) return monto/21; return 0; }
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function periodLabel(p){ if(!p) return ''; const [y,m] = p.split('-'); return MESES[parseInt(m,10)-1] + ' ' + y; }
+function dateShort(d){ if(!d) return ''; const [y,m,day] = d.split('-'); return day+'/'+m+'/'+y.slice(2); }
+function shiftMonth(period, delta){
+  const [y,m] = period.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+let toastTimer=null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2400);
+}
+
+/* ============================================================
+   PERIODS / AGGREGATION
+   ============================================================ */
+function allPeriods(){
+  const set = new Set();
+  tx.forEach(t=>set.add(periodOf(t.date)));
+  pagosIVA.forEach(p=>set.add(p.period));
+  Object.keys(contador.entries||{}).forEach(p=>set.add(p));
+  set.add(currentPeriod());
+  return Array.from(set).sort();
+}
+
+function emptyByRate(){ return {10:{ingGrav:0,ingIva:0,egGrav:0,egIva:0},5:{ingGrav:0,ingIva:0,egGrav:0,egIva:0},0:{ingGrav:0,ingIva:0,egGrav:0,egIva:0}}; }
+
+function computeResumenPorMes(){
+  const periods = allPeriods();
+  let saldoFavor = 0;
+  const map = {};
+  periods.forEach(p=>{
+    const saldoInicial = saldoFavor;
+    const txsMes = tx.filter(t=>periodOf(t.date)===p);
+    const ingresos = txsMes.filter(t=>t.type==='ingreso');
+    const egresos  = txsMes.filter(t=>t.type==='egreso');
+    const sum = (arr,key)=>arr.reduce((a,b)=>a+(Number(b[key])||0),0);
+    const ingresosTotal = sum(ingresos,'monto');
+    const egresosTotal  = sum(egresos,'monto');
+    const debito  = sum(ingresos,'iva');
+    const credito = sum(egresos,'iva');
+    const netoAntes = debito - credito;
+    const combinedNeto = netoAntes - saldoInicial;
+    let aPagar, saldoUsado, saldoFinal;
+    if(combinedNeto >= 0){
+      aPagar = combinedNeto; saldoUsado = saldoInicial; saldoFinal = 0;
+    } else {
+      aPagar = 0; saldoFinal = -combinedNeto; saldoUsado = Math.max(netoAntes,0);
+    }
+    const byRate = emptyByRate();
+    ingresos.forEach(t=>{ byRate[t.rate].ingGrav += Number(t.gravada)||0; byRate[t.rate].ingIva += Number(t.iva)||0; });
+    egresos.forEach(t=>{ byRate[t.rate].egGrav += Number(t.gravada)||0; byRate[t.rate].egIva += Number(t.iva)||0; });
+    map[p] = { period:p, ingresosTotal, egresosTotal, debito, credito, netoAntes, saldoInicial, aPagar, saldoUsado, saldoFinal, byRate };
+    saldoFavor = saldoFinal;
+  });
+  return map;
+}
+
+function emptyMonthData(p){
+  return { period:p, ingresosTotal:0, egresosTotal:0, debito:0, credito:0, netoAntes:0, saldoInicial:0, aPagar:0, saldoUsado:0, saldoFinal:0, byRate: emptyByRate() };
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='resumen') renderResumen();
+    if(btn.dataset.view==='impuestos') renderImpuestos();
+    if(btn.dataset.view==='contador') renderContador();
+  });
+});
+
+/* ============================================================
+   REGISTRO — form state
+   ============================================================ */
+let currentTipo = 'ingreso';
+let currentRate = 10;
+let manualIva = false;
+let editingId = null;
+
+const elFecha = document.getElementById('entry-fecha');
+const elLugar = document.getElementById('entry-lugar');
+const elLugarLabel = document.getElementById('entry-lugar-label');
+const elDesc = document.getElementById('entry-desc');
+const elFactura = document.getElementById('entry-factura');
+const elMonto = document.getElementById('entry-monto');
+const elGravadaDisplay = document.getElementById('calc-gravada');
+const elIvaDisplay = document.getElementById('calc-iva-display');
+const elIvaInput = document.getElementById('calc-iva-input');
+const elLugaresList = document.getElementById('lugares-list');
+const elBtnEliminar = document.getElementById('btn-eliminar-entry');
+const elBtnCancelar = document.getElementById('btn-cancelar-edit');
+const elBtnGuardar = document.getElementById('btn-guardar');
+
+elFecha.value = todayStr();
+
+document.getElementById('tipo-toggle').addEventListener('click', e=>{
+  const btn = e.target.closest('.seg-btn'); if(!btn) return;
+  currentTipo = btn.dataset.tipo;
+  document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  elLugarLabel.textContent = currentTipo==='ingreso' ? 'Cliente / lugar' : 'Proveedor / lugar';
+  populateLugaresList();
+});
+
+document.getElementById('rate-toggle').addEventListener('click', e=>{
+  const btn = e.target.closest('.seg-btn'); if(!btn) return;
+  currentRate = Number(btn.dataset.rate);
+  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  recalc();
+});
+
+elMonto.addEventListener('input', recalc);
+
+document.getElementById('btn-manual-iva').addEventListener('click', ()=>{
+  manualIva = !manualIva;
+  if(manualIva){
+    elIvaInput.value = Math.round(calcIVAforCurrent());
+    elIvaInput.classList.remove('hidden');
+    elIvaDisplay.classList.add('hidden');
+    document.getElementById('btn-manual-iva').textContent = 'auto';
+  } else {
+    elIvaInput.classList.add('hidden');
+    elIvaDisplay.classList.remove('hidden');
+    document.getElementById('btn-manual-iva').textContent = 'editar';
+  }
+  recalc();
+});
+elIvaInput.addEventListener('input', recalc);
+
+function calcIVAforCurrent(){ return calcIVA(elMonto.value, currentRate); }
+
+function recalc(){
+  const monto = Number(elMonto.value)||0;
+  let iva;
+  if(manualIva){ iva = Number(elIvaInput.value)||0; }
+  else { iva = calcIVAforCurrent(); }
+  const gravada = monto - iva;
+  elGravadaDisplay.textContent = fmtGs(gravada);
+  elIvaDisplay.textContent = fmtGs(iva);
+}
+recalc();
+
+function populateLugaresList(){
+  const arr = currentTipo==='ingreso' ? placesIn : placesOut;
+  elLugaresList.innerHTML = arr.map(p=>`<option value="${escapeHtml(p)}">`).join('');
+}
+populateLugaresList();
+
+function addPlace(type, name){
+  name = (name||'').trim(); if(!name) return;
+  const arr = type==='ingreso' ? placesIn : placesOut;
+  if(!arr.some(p=>p.toLowerCase()===name.toLowerCase())){
+    arr.push(name); arr.sort((a,b)=>a.localeCompare(b));
+    savePlaces();
+  }
+}
+
+document.getElementById('form-entry').addEventListener('submit', e=>{
+  e.preventDefault();
+  const monto = Number(elMonto.value)||0;
+  const iva = manualIva ? (Number(elIvaInput.value)||0) : calcIVAforCurrent();
+  const gravada = monto - iva;
+  const data = {
+    id: editingId || uid(),
+    type: currentTipo,
+    date: elFecha.value,
+    place: elLugar.value.trim(),
+    desc: elDesc.value.trim(),
+    factura: elFactura.value.trim(),
+    monto, rate: currentRate, iva, gravada, manual: manualIva
+  };
+  if(editingId){
+    const idx = tx.findIndex(t=>t.id===editingId);
+    if(idx>-1) tx[idx]=data;
+  } else {
+    tx.push(data);
+  }
+  saveTx();
+  addPlace(currentTipo, data.place);
+  populateLugaresList();
+  toast(editingId? 'Registro actualizado' : 'Registro guardado');
+  resetForm();
+  renderRegistroList();
+});
+
+elBtnCancelar.addEventListener('click', resetForm);
+elBtnEliminar.addEventListener('click', ()=>{
+  if(!editingId) return;
+  if(confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')){
+    tx = tx.filter(t=>t.id!==editingId);
+    saveTx();
+    toast('Registro eliminado');
+    resetForm();
+    renderRegistroList();
+  }
+});
+
+function resetForm(){
+  editingId = null;
+  document.getElementById('form-entry').reset();
+  elFecha.value = todayStr();
+  currentTipo = 'ingreso';
+  currentRate = 10;
+  manualIva = false;
+  document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.tipo==='ingreso'));
+  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.rate==='10'));
+  elLugarLabel.textContent = 'Cliente / lugar';
+  elIvaInput.classList.add('hidden');
+  elIvaDisplay.classList.remove('hidden');
+  document.getElementById('btn-manual-iva').textContent = 'editar';
+  elBtnEliminar.classList.add('hidden');
+  elBtnCancelar.classList.add('hidden');
+  elBtnGuardar.textContent = 'Guardar';
+  populateLugaresList();
+  recalc();
+}
+
+function loadIntoForm(t){
+  editingId = t.id;
+  currentTipo = t.type;
+  currentRate = t.rate;
+  manualIva = !!t.manual;
+  document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.tipo===t.type));
+  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.rate)===t.rate));
+  elLugarLabel.textContent = t.type==='ingreso' ? 'Cliente / lugar' : 'Proveedor / lugar';
+  populateLugaresList();
+  elFecha.value = t.date;
+  elLugar.value = t.place;
+  elDesc.value = t.desc||'';
+  elFactura.value = t.factura||'';
+  elMonto.value = t.monto;
+  if(manualIva){
+    elIvaInput.value = Math.round(t.iva);
+    elIvaInput.classList.remove('hidden');
+    elIvaDisplay.classList.add('hidden');
+    document.getElementById('btn-manual-iva').textContent = 'auto';
+  } else {
+    elIvaInput.classList.add('hidden');
+    elIvaDisplay.classList.remove('hidden');
+    document.getElementById('btn-manual-iva').textContent = 'editar';
+  }
+  recalc();
+  elBtnEliminar.classList.remove('hidden');
+  elBtnCancelar.classList.remove('hidden');
+  elBtnGuardar.textContent = 'Guardar cambios';
+  document.querySelector('.entry-card').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+/* ---------- Registro list ---------- */
+const elRegMesFiltro = document.getElementById('registro-mes-filtro');
+elRegMesFiltro.value = currentPeriod();
+elRegMesFiltro.addEventListener('change', renderRegistroList);
+document.getElementById('reg-mes-prev').addEventListener('click', ()=>{ elRegMesFiltro.value = shiftMonth(elRegMesFiltro.value||currentPeriod(), -1); renderRegistroList(); });
+document.getElementById('reg-mes-next').addEventListener('click', ()=>{ elRegMesFiltro.value = shiftMonth(elRegMesFiltro.value||currentPeriod(), 1); renderRegistroList(); });
+
+function renderRegistroList(){
+  const period = elRegMesFiltro.value || currentPeriod();
+  const list = tx.filter(t=>periodOf(t.date)===period).sort((a,b)=> b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const container = document.getElementById('registro-list');
+  document.getElementById('registro-count').textContent = list.length ? `${list.length} registro(s) en ${periodLabel(period)}` : '';
+  if(!list.length){
+    container.innerHTML = `<div class="empty-state">Sin registros en ${periodLabel(period)}.<br>Agregá un ingreso o egreso arriba.</div>`;
+    return;
+  }
+  container.innerHTML = list.map(t=>`
+    <div class="ledger-row ${t.type}" data-id="${t.id}">
+      <div class="row-main">
+        <span class="row-date">${dateShort(t.date)}</span>
+        <span class="row-place">${escapeHtml(t.place)}</span>
+        <span class="badge">${t.rate===0?'Exenta':t.rate+'%'}${t.manual?' · manual':''}</span>
+      </div>
+      <div class="row-amounts">
+        <span class="num row-monto">${fmtGs(t.monto)}</span>
+        <span class="num row-iva">IVA ${fmtGs(t.iva)}</span>
+      </div>
+    </div>
+  `).join('');
+  container.querySelectorAll('.ledger-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const t = tx.find(x=>x.id===row.dataset.id);
+      if(t) loadIntoForm(t);
+    });
+  });
+}
+
+/* ============================================================
+   RESUMEN
+   ============================================================ */
+let resumenModo = 'mes';
+const elResumenMes = document.getElementById('resumen-mes');
+const elResumenAnio = document.getElementById('resumen-anio');
+elResumenMes.value = currentPeriod();
+
+document.getElementById('resumen-modo-toggle').addEventListener('click', e=>{
+  const btn = e.target.closest('.seg-btn'); if(!btn) return;
+  resumenModo = btn.dataset.modo;
+  document.querySelectorAll('#resumen-modo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  elResumenMes.classList.toggle('hidden', resumenModo!=='mes');
+  elResumenAnio.classList.toggle('hidden', resumenModo!=='anio');
+  renderResumen();
+});
+elResumenMes.addEventListener('change', renderResumen);
+elResumenAnio.addEventListener('change', renderResumen);
+
+function populateAnioSelect(){
+  const years = new Set(allPeriods().map(p=>p.slice(0,4)));
+  years.add(String(new Date().getFullYear()));
+  const sorted = Array.from(years).sort().reverse();
+  elResumenAnio.innerHTML = sorted.map(y=>`<option value="${y}">${y}</option>`).join('');
+  elResumenAnio.value = String(new Date().getFullYear());
+}
+populateAnioSelect();
+
+function setCard(id, value, opts){
+  const el = document.getElementById(id);
+  el.textContent = fmtGs(value);
+}
+
+function renderResumen(){
+  const map = computeResumenPorMes();
+  let data, breakdown;
+  if(resumenModo === 'mes'){
+    const p = elResumenMes.value || currentPeriod();
+    data = map[p] || emptyMonthData(p);
+    breakdown = data.byRate;
+  } else {
+    const year = elResumenAnio.value || String(new Date().getFullYear());
+    const months = Object.keys(map).filter(p=>p.startsWith(year+'-')).sort();
+    data = { ingresosTotal:0, egresosTotal:0, debito:0, credito:0, aPagar:0, saldoUsado:0, saldoFinal:0 };
+    breakdown = emptyByRate();
+    months.forEach(p=>{
+      const m = map[p];
+      data.ingresosTotal += m.ingresosTotal; data.egresosTotal += m.egresosTotal;
+      data.debito += m.debito; data.credito += m.credito;
+      data.aPagar += m.aPagar; data.saldoUsado += m.saldoUsado;
+      data.saldoFinal = m.saldoFinal; // last month of year carries forward
+      [10,5,0].forEach(r=>{
+        breakdown[r].ingGrav += m.byRate[r].ingGrav; breakdown[r].ingIva += m.byRate[r].ingIva;
+        breakdown[r].egGrav  += m.byRate[r].egGrav;  breakdown[r].egIva  += m.byRate[r].egIva;
+      });
+    });
+  }
+
+  setCard('r-ingresos', data.ingresosTotal);
+  setCard('r-egresos', data.egresosTotal);
+  setCard('r-debito', data.debito);
+  setCard('r-credito', data.credito);
+  setCard('r-saldo-usado', data.saldoUsado);
+  setCard('r-saldo-restante', data.saldoFinal);
+
+  const card = document.getElementById('r-apagar-card');
+  const label = document.getElementById('r-apagar-label');
+  if(data.aPagar > 0){
+    card.classList.remove('credito');
+    label.textContent = resumenModo==='mes' ? 'IVA a pagar este mes' : 'IVA a pagar en el año';
+    document.getElementById('r-apagar').textContent = fmtGs(data.aPagar);
+  } else {
+    card.classList.add('credito');
+    label.textContent = 'Sin saldo a pagar';
+    document.getElementById('r-apagar').textContent = fmtGs(0);
+  }
+
+  const tbody = document.getElementById('resumen-breakdown-body');
+  const rateLabel = {10:'10%',5:'5%',0:'Exenta'};
+  tbody.innerHTML = [10,5,0].map(r=>`
+    <tr>
+      <td>${rateLabel[r]}</td>
+      <td class="num">${fmtGs(breakdown[r].ingGrav)}</td>
+      <td class="num">${fmtGs(breakdown[r].ingIva)}</td>
+      <td class="num">${fmtGs(breakdown[r].egGrav)}</td>
+      <td class="num">${fmtGs(breakdown[r].egIva)}</td>
+    </tr>
+  `).join('');
+}
+
+/* ============================================================
+   IMPUESTOS (pagos de IVA)
+   ============================================================ */
+document.getElementById('pago-periodo').value = currentPeriod();
+document.getElementById('pago-fecha').value = todayStr();
+
+document.getElementById('form-pago-iva').addEventListener('submit', e=>{
+  e.preventDefault();
+  const periodo = document.getElementById('pago-periodo').value;
+  const monto = Number(document.getElementById('pago-monto').value)||0;
+  const fecha = document.getElementById('pago-fecha').value;
+  const nota = document.getElementById('pago-nota').value.trim();
+  if(!periodo || !fecha){ return; }
+  pagosIVA.push({ id: uid(), period: periodo, amount: monto, date: fecha, note: nota });
+  savePagos();
+  document.getElementById('form-pago-iva').reset();
+  document.getElementById('pago-periodo').value = periodo;
+  document.getElementById('pago-fecha').value = todayStr();
+  toast('Pago registrado');
+  renderImpuestos();
+});
+
+function renderImpuestos(){
+  const map = computeResumenPorMes();
+  const periods = Object.keys(map).sort().reverse();
+  const container = document.getElementById('impuestos-list');
+  container.innerHTML = periods.map(p=>{
+    const m = map[p];
+    const pagosPeriodo = pagosIVA.filter(x=>x.period===p);
+    const pagado = pagosPeriodo.reduce((a,b)=>a+Number(b.amount||0),0);
+    const pendiente = m.aPagar - pagado;
+    const rowClass = pendiente > 0 ? 'pendiente' : (pendiente < 0 ? 'afavor' : '');
+    const pendienteLabel = pendiente > 0 ? fmtGs(pendiente) : (pendiente < 0 ? fmtGs(-pendiente)+' pagado de más' : 'Saldado');
+    const minis = pagosPeriodo.map(pg=>`
+      <div class="pago-mini">
+        <span>${dateShort(pg.date)} — ${fmtGs(pg.amount)}${pg.note? ' · '+escapeHtml(pg.note):''}</span>
+        <button data-pago-id="${pg.id}">eliminar</button>
+      </div>
+    `).join('');
+    return `
+      <div class="period-card">
+        <div class="period-head"><span class="pname">${periodLabel(p)}</span></div>
+        <div class="period-row"><span class="lbl">IVA a pagar (calculado)</span><span class="val num">${fmtGs(m.aPagar)}</span></div>
+        <div class="period-row"><span class="lbl">Pagado</span><span class="val num">${fmtGs(pagado)}</span></div>
+        <div class="period-row ${rowClass}"><span class="lbl">Pendiente</span><span class="val num">${pendienteLabel}</span></div>
+        ${minis}
+      </div>
+    `;
+  }).join('');
+  container.querySelectorAll('[data-pago-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(confirm('¿Eliminar este pago?')){
+        pagosIVA = pagosIVA.filter(p=>p.id!==btn.dataset.pagoId);
+        savePagos();
+        renderImpuestos();
+      }
+    });
+  });
+}
+
+/* ============================================================
+   CONTADOR
+   ============================================================ */
+const elContadorFee = document.getElementById('contador-fee-default');
+elContadorFee.value = contador.fee || '';
+elContadorFee.addEventListener('change', ()=>{
+  contador.fee = Number(elContadorFee.value)||0;
+  saveContador();
+  renderContador();
+});
+
+document.getElementById('btn-agregar-mes-contador').addEventListener('click', ()=>{
+  const p = document.getElementById('contador-nuevo-mes').value;
+  if(!p){ toast('Elegí un mes primero'); return; }
+  if(!contador.entries[p]) contador.entries[p] = { amount: contador.fee||0, paid:false, datePaid:'' };
+  saveContador();
+  renderContador();
+});
+
+function renderContador(){
+  const periods = allPeriods().slice().reverse();
+  const container = document.getElementById('contador-list');
+  container.innerHTML = periods.map(p=>{
+    const entry = contador.entries[p] || { amount: contador.fee||0, paid:false, datePaid:'' };
+    return `
+      <div class="contador-row ${entry.paid?'pagado':''}" data-period="${p}">
+        <span class="cmonth">${periodLabel(p)}</span>
+        <span class="camount"><input type="number" min="0" step="1" value="${entry.amount}" data-field="amount" data-period="${p}"></span>
+        <span class="cdate"><input type="date" value="${entry.datePaid||''}" data-field="datePaid" data-period="${p}" ${entry.paid?'':'disabled'}></span>
+        <button class="check-pill ${entry.paid?'on':''}" data-toggle-paid="${p}" aria-label="Pagado"></button>
+      </div>
+    `;
+  }).join('');
+  container.querySelectorAll('input[data-field]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const p = inp.dataset.period, field = inp.dataset.field;
+      if(!contador.entries[p]) contador.entries[p] = { amount: contador.fee||0, paid:false, datePaid:'' };
+      if(field==='amount') contador.entries[p].amount = Number(inp.value)||0;
+      if(field==='datePaid') contador.entries[p].datePaid = inp.value;
+      saveContador();
+    });
+  });
+  container.querySelectorAll('[data-toggle-paid]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = btn.dataset.togglePaid;
+      if(!contador.entries[p]) contador.entries[p] = { amount: contador.fee||0, paid:false, datePaid:'' };
+      contador.entries[p].paid = !contador.entries[p].paid;
+      if(contador.entries[p].paid && !contador.entries[p].datePaid) contador.entries[p].datePaid = todayStr();
+      saveContador();
+      renderContador();
+    });
+  });
+}
+
+/* ============================================================
+   AJUSTES / BACKUP
+   ============================================================ */
+const modalAjustes = document.getElementById('modal-ajustes');
+document.getElementById('btn-ajustes').addEventListener('click', ()=>modalAjustes.classList.remove('hidden'));
+document.getElementById('btn-cerrar-ajustes').addEventListener('click', ()=>modalAjustes.classList.add('hidden'));
+modalAjustes.addEventListener('click', e=>{ if(e.target===modalAjustes) modalAjustes.classList.add('hidden'); });
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function timestampForFile(){
+  const d = new Date();
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`;
+}
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+}
+
+document.getElementById('btn-export-json').addEventListener('click', ()=>{
+  const backup = { app:'libro-iva', version:1, exportedAt: new Date().toISOString(), tx, placesIn, placesOut, pagosIVA, contador, settings };
+  downloadBlob(JSON.stringify(backup, null, 2), `libro-iva-backup-${timestampForFile()}.json`, 'application/json');
+  toast('Respaldo exportado');
+});
+
+document.getElementById('input-import-json').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.tx)){ toast('Archivo no válido'); return; }
+      if(!confirm('Esto reemplazará todos los datos actuales por los del archivo. ¿Continuar?')) return;
+      tx = data.tx || [];
+      placesIn = data.placesIn || [];
+      placesOut = data.placesOut || [];
+      pagosIVA = data.pagosIVA || [];
+      contador = data.contador || { fee:0, entries:{} };
+      settings = data.settings || {};
+      saveTx(); savePlaces(); savePagos(); saveContador(); saveSettings();
+      populateLugaresList(); populateAnioSelect();
+      elContadorFee.value = contador.fee || '';
+      renderRegistroList(); renderResumen(); renderImpuestos(); renderContador();
+      toast('Respaldo importado correctamente');
+      modalAjustes.classList.add('hidden');
+    }catch(err){
+      toast('No se pudo leer el archivo');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-export-csv').addEventListener('click', ()=>{
+  const header = ['Fecha','Tipo','Lugar','Descripcion','Factura','Monto','Tasa','Gravada','IVA'];
+  const rows = tx.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(t=>[
+    t.date, t.type, t.place, t.desc||'', t.factura||'', Math.round(t.monto), (t.rate===0?'Exenta':t.rate+'%'), Math.round(t.gravada), Math.round(t.iva)
+  ]);
+  const csvEscape = v => { v=String(v); return /[",\n;]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  const csv = [header, ...rows].map(r=>r.map(csvEscape).join(';')).join('\n');
+  downloadBlob('\uFEFF'+csv, `libro-iva-registro-${timestampForFile()}.csv`, 'text/csv;charset=utf-8');
+  toast('CSV exportado');
+});
+
+document.getElementById('btn-clear-all').addEventListener('click', ()=>{
+  if(confirm('Esto borra TODOS los datos guardados en este celular (registros, pagos, contador). ¿Estás seguro?')){
+    if(confirm('Última confirmación: no hay forma de recuperar estos datos salvo que tengas un respaldo .json. ¿Borrar todo?')){
+      tx=[]; placesIn=[]; placesOut=[]; pagosIVA=[]; contador={fee:0,entries:{}}; settings={};
+      saveTx(); savePlaces(); savePagos(); saveContador(); saveSettings();
+      populateLugaresList(); populateAnioSelect();
+      elContadorFee.value = '';
+      renderRegistroList(); renderResumen(); renderImpuestos(); renderContador();
+      toast('Datos borrados');
+      modalAjustes.classList.add('hidden');
+    }
+  }
+});
+
+/* ============================================================
+   PWA install + service worker
+   ============================================================ */
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  deferredInstall = e;
+  document.getElementById('btn-install').style.display = 'flex';
+});
+document.getElementById('btn-install').addEventListener('click', async ()=>{
+  if(!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall = null;
+  document.getElementById('btn-install').style.display = 'none';
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderRegistroList();
+renderResumen();
+
+})();
+</script>
+</body>
+</html>
