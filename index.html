@@ -124,7 +124,19 @@ input::placeholder{color:#B7AE98;}
 .calc-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:14.5px;}
 .calc-row + .calc-row{border-top:1px dotted var(--line);}
 .link-btn{background:none;border:none;color:var(--bronce);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:0;margin-left:6px;font-family:var(--font-sans);}
-#calc-iva-input{max-width:140px;text-align:right;border-bottom:1.5px solid var(--bronce);}
+.line-iva-input{max-width:140px;text-align:right;border-bottom:1.5px solid var(--bronce);}
+
+.suggestions-box{position:absolute;left:0;right:0;top:100%;margin-top:-2px;background:var(--white);border:1.5px solid var(--bronce);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 6px 14px rgba(0,0,0,.14);z-index:30;max-height:190px;overflow-y:auto;}
+.suggestion-item{padding:10px 12px;font-size:14.5px;border-bottom:1px dotted var(--line);cursor:pointer;}
+.suggestion-item:last-child{border-bottom:none;}
+.suggestion-item:active{background:var(--paper);}
+
+.btn-add-line{display:block;width:100%;background:transparent;border:1.5px dashed var(--bronce);color:var(--bronce);padding:10px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;margin:2px 0 12px;font-family:var(--font-sans);}
+.btn-add-line:active{background:rgba(182,139,60,.1);}
+.line-row{border:1px solid var(--line);border-radius:10px;padding:10px 10px 2px;margin-bottom:10px;background:rgba(255,255,255,.5);}
+.line-row-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;}
+.line-num{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);font-weight:700;}
+.line-remove{color:var(--rojo) !important;}
 
 .btn-primary,.btn-secondary,.btn-danger{
   display:inline-block;width:100%;text-align:center;padding:12px;border-radius:9px;font-size:15px;font-weight:700;
@@ -254,8 +266,8 @@ table.ledger-table tfoot td{font-weight:700;border-top:1.5px solid var(--bronce)
     <section id="view-registro" class="view active">
       <div class="entry-card">
         <div class="seg-control" id="tipo-toggle">
-          <button type="button" data-tipo="ingreso" class="seg-btn ingreso active">↗ Ingreso</button>
-          <button type="button" data-tipo="egreso" class="seg-btn egreso">↙ Egreso</button>
+          <button type="button" data-tipo="ingreso" class="seg-btn ingreso">↗ Ingreso</button>
+          <button type="button" data-tipo="egreso" class="seg-btn egreso active">↙ Egreso</button>
         </div>
 
         <form id="form-entry">
@@ -266,10 +278,10 @@ table.ledger-table tfoot td{font-weight:700;border-top:1.5px solid var(--bronce)
             <input type="date" id="entry-fecha" required>
           </label>
 
-          <label class="field">
-            <span id="entry-lugar-label">Lugar / razón social</span>
-            <input type="text" id="entry-lugar" list="lugares-list" placeholder="Ej: Supermercado Salemma" autocomplete="off" required>
-            <datalist id="lugares-list"></datalist>
+          <label class="field" style="position:relative;">
+            <span id="entry-lugar-label">Proveedor / lugar</span>
+            <input type="text" id="entry-lugar" placeholder="Ej: Supermercado Salemma" autocomplete="off" required>
+            <div id="lugar-suggestions" class="suggestions-box hidden"></div>
           </label>
 
           <label class="field">
@@ -282,30 +294,11 @@ table.ledger-table tfoot td{font-weight:700;border-top:1.5px solid var(--bronce)
             <input type="text" id="entry-factura" placeholder="001-001-0000001">
           </label>
 
-          <label class="field">
-            <span>Monto total (Gs.)</span>
-            <input type="number" id="entry-monto" inputmode="decimal" min="0" step="1" placeholder="0" required>
-          </label>
+          <div id="lines-container"></div>
+          <button type="button" class="btn-add-line" id="btn-add-line">+ Agregar otra tasa (factura mixta)</button>
 
-          <div class="field">
-            <span>Tasa de IVA</span>
-            <div class="seg-control" id="rate-toggle">
-              <button type="button" data-rate="10" class="seg-btn active">10%</button>
-              <button type="button" data-rate="5" class="seg-btn">5%</button>
-              <button type="button" data-rate="0" class="seg-btn">Exenta</button>
-            </div>
-          </div>
-
-          <div class="calc-box">
-            <div class="calc-row">
-              <span>Gravada</span>
-              <span class="num" id="calc-gravada">₲ 0</span>
-            </div>
-            <div class="calc-row">
-              <span>IVA <button type="button" id="btn-manual-iva" class="link-btn">editar</button></span>
-              <span class="num" id="calc-iva-display">₲ 0</span>
-              <input type="number" id="calc-iva-input" class="num hidden" min="0" step="1">
-            </div>
+          <div class="calc-box" id="lines-total-box">
+            <div class="calc-row"><strong>Total factura</strong><strong class="num" id="lines-total-monto">₲ 0</strong></div>
           </div>
 
           <button type="submit" class="btn-primary" id="btn-guardar">Guardar</button>
@@ -456,6 +449,24 @@ function savePagos(){ lsSet(KEYS.PAGOS, pagosIVA); }
 function saveContador(){ lsSet(KEYS.CONTADOR, contador); }
 function saveSettings(){ lsSet(KEYS.SETTINGS, settings); }
 
+/* Migrate entries created before "facturas mixtas" support (single rate/monto/iva) to the new lines[] format. */
+function migrateTx(){
+  let changed = false;
+  tx.forEach(t=>{
+    if(!t.lines){
+      t.lines = [{ rate: t.rate, monto: Number(t.monto)||0, iva: Number(t.iva)||0, manual: !!t.manual }];
+      delete t.monto; delete t.rate; delete t.iva; delete t.gravada; delete t.manual;
+      changed = true;
+    }
+  });
+  if(changed) saveTx();
+}
+migrateTx();
+
+function txMonto(t){ return (t.lines||[]).reduce((a,l)=>a+(Number(l.monto)||0),0); }
+function txIva(t){ return (t.lines||[]).reduce((a,l)=>a+(Number(l.iva)||0),0); }
+function txGravada(t){ return (t.lines||[]).reduce((a,l)=>a+((Number(l.monto)||0)-(Number(l.iva)||0)),0); }
+
 /* ============================================================
    HELPERS
    ============================================================ */
@@ -506,11 +517,11 @@ function computeResumenPorMes(){
     const txsMes = tx.filter(t=>periodOf(t.date)===p);
     const ingresos = txsMes.filter(t=>t.type==='ingreso');
     const egresos  = txsMes.filter(t=>t.type==='egreso');
-    const sum = (arr,key)=>arr.reduce((a,b)=>a+(Number(b[key])||0),0);
-    const ingresosTotal = sum(ingresos,'monto');
-    const egresosTotal  = sum(egresos,'monto');
-    const debito  = sum(ingresos,'iva');
-    const credito = sum(egresos,'iva');
+    const sum = (arr,fn)=>arr.reduce((a,b)=>a+fn(b),0);
+    const ingresosTotal = sum(ingresos, txMonto);
+    const egresosTotal  = sum(egresos, txMonto);
+    const debito  = sum(ingresos, txIva);
+    const credito = sum(egresos, txIva);
     const netoAntes = debito - credito;
     const combinedNeto = netoAntes - saldoInicial;
     let aPagar, saldoUsado, saldoFinal;
@@ -520,8 +531,8 @@ function computeResumenPorMes(){
       aPagar = 0; saldoFinal = -combinedNeto; saldoUsado = Math.max(netoAntes,0);
     }
     const byRate = emptyByRate();
-    ingresos.forEach(t=>{ byRate[t.rate].ingGrav += Number(t.gravada)||0; byRate[t.rate].ingIva += Number(t.iva)||0; });
-    egresos.forEach(t=>{ byRate[t.rate].egGrav += Number(t.gravada)||0; byRate[t.rate].egIva += Number(t.iva)||0; });
+    ingresos.forEach(t=>{ (t.lines||[]).forEach(l=>{ const g=(Number(l.monto)||0)-(Number(l.iva)||0); byRate[l.rate].ingGrav += g; byRate[l.rate].ingIva += Number(l.iva)||0; }); });
+    egresos.forEach(t=>{ (t.lines||[]).forEach(l=>{ const g=(Number(l.monto)||0)-(Number(l.iva)||0); byRate[l.rate].egGrav += g; byRate[l.rate].egIva += Number(l.iva)||0; }); });
     map[p] = { period:p, ingresosTotal, egresosTotal, debito, credito, netoAntes, saldoInicial, aPagar, saldoUsado, saldoFinal, byRate };
     saldoFavor = saldoFinal;
   });
@@ -550,21 +561,18 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 /* ============================================================
    REGISTRO — form state
    ============================================================ */
-let currentTipo = 'ingreso';
-let currentRate = 10;
-let manualIva = false;
+let currentTipo = 'egreso';
 let editingId = null;
+let formLines = [{ rate:10, monto:'', manual:false, ivaOverride:0 }];
 
 const elFecha = document.getElementById('entry-fecha');
 const elLugar = document.getElementById('entry-lugar');
 const elLugarLabel = document.getElementById('entry-lugar-label');
+const elLugarBox = document.getElementById('lugar-suggestions');
 const elDesc = document.getElementById('entry-desc');
 const elFactura = document.getElementById('entry-factura');
-const elMonto = document.getElementById('entry-monto');
-const elGravadaDisplay = document.getElementById('calc-gravada');
-const elIvaDisplay = document.getElementById('calc-iva-display');
-const elIvaInput = document.getElementById('calc-iva-input');
-const elLugaresList = document.getElementById('lugares-list');
+const elLinesContainer = document.getElementById('lines-container');
+const elLinesTotal = document.getElementById('lines-total-monto');
 const elBtnEliminar = document.getElementById('btn-eliminar-entry');
 const elBtnCancelar = document.getElementById('btn-cancelar-edit');
 const elBtnGuardar = document.getElementById('btn-guardar');
@@ -576,52 +584,138 @@ document.getElementById('tipo-toggle').addEventListener('click', e=>{
   currentTipo = btn.dataset.tipo;
   document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
   elLugarLabel.textContent = currentTipo==='ingreso' ? 'Cliente / lugar' : 'Proveedor / lugar';
-  populateLugaresList();
+  hideLugarSuggestions();
 });
 
-document.getElementById('rate-toggle').addEventListener('click', e=>{
-  const btn = e.target.closest('.seg-btn'); if(!btn) return;
-  currentRate = Number(btn.dataset.rate);
-  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b===btn));
-  recalc();
-});
+/* ---------- Multi-rate lines ---------- */
+function rateLabelText(r){ return r===0 ? 'Exenta' : r+'%'; }
+function lineIva(line){
+  if(line.rate===0) return 0;
+  if(line.manual) return Number(line.ivaOverride)||0;
+  return calcIVA(line.monto, line.rate);
+}
+function lineGravada(line){ return (Number(line.monto)||0) - lineIva(line); }
 
-elMonto.addEventListener('input', recalc);
+function renderLines(){
+  elLinesContainer.innerHTML = formLines.map((line, i)=>{
+    const iva = lineIva(line);
+    const grav = lineGravada(line);
+    return `
+    <div class="line-row" data-idx="${i}">
+      ${formLines.length>1 ? `<div class="line-row-head"><span class="line-num">Tasa ${i+1}</span><button type="button" class="link-btn line-remove" data-idx="${i}">quitar</button></div>` : ''}
+      <div class="seg-control" data-line-rate="${i}">
+        <button type="button" class="seg-btn ${line.rate===10?'active':''}" data-rate="10" data-idx="${i}">10%</button>
+        <button type="button" class="seg-btn ${line.rate===5?'active':''}" data-rate="5" data-idx="${i}">5%</button>
+        <button type="button" class="seg-btn ${line.rate===0?'active':''}" data-rate="0" data-idx="${i}">Exenta</button>
+      </div>
+      <label class="field">
+        <span>Monto ${rateLabelText(line.rate)} (Gs.)</span>
+        <input type="number" min="0" step="1" inputmode="decimal" class="line-monto" data-idx="${i}" value="${line.monto}" placeholder="0">
+      </label>
+      <div class="calc-box">
+        <div class="calc-row">
+          <span>Gravada</span>
+          <span class="num" data-calc-gravada="${i}">${fmtGs(grav)}</span>
+        </div>
+        <div class="calc-row">
+          <span>IVA ${line.rate!==0 ? `<button type="button" class="link-btn line-manual-toggle" data-idx="${i}">${line.manual?'auto':'editar'}</button>` : ''}</span>
+          ${line.rate===0
+            ? `<span class="num">₲ 0</span>`
+            : (line.manual
+              ? `<input type="number" min="0" step="1" class="num line-iva-input" data-idx="${i}" value="${Math.round(iva)}">`
+              : `<span class="num" data-calc-iva="${i}">${fmtGs(iva)}</span>`)
+          }
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  updateLinesTotal();
+}
 
-document.getElementById('btn-manual-iva').addEventListener('click', ()=>{
-  manualIva = !manualIva;
-  if(manualIva){
-    elIvaInput.value = Math.round(calcIVAforCurrent());
-    elIvaInput.classList.remove('hidden');
-    elIvaDisplay.classList.add('hidden');
-    document.getElementById('btn-manual-iva').textContent = 'auto';
-  } else {
-    elIvaInput.classList.add('hidden');
-    elIvaDisplay.classList.remove('hidden');
-    document.getElementById('btn-manual-iva').textContent = 'editar';
+function updateLineCalcDisplay(i){
+  const line = formLines[i];
+  const gEl = elLinesContainer.querySelector(`[data-calc-gravada="${i}"]`);
+  if(gEl) gEl.textContent = fmtGs(lineGravada(line));
+  const ivaEl = elLinesContainer.querySelector(`[data-calc-iva="${i}"]`);
+  if(ivaEl) ivaEl.textContent = fmtGs(lineIva(line));
+  updateLinesTotal();
+}
+
+function updateLinesTotal(){
+  const total = formLines.reduce((a,l)=>a+(Number(l.monto)||0),0);
+  elLinesTotal.textContent = fmtGs(total);
+}
+
+elLinesContainer.addEventListener('click', e=>{
+  const rateBtn = e.target.closest('[data-rate]');
+  if(rateBtn){
+    const idx = Number(rateBtn.dataset.idx);
+    formLines[idx].rate = Number(rateBtn.dataset.rate);
+    if(formLines[idx].rate===0) formLines[idx].manual = false;
+    renderLines();
+    return;
   }
-  recalc();
+  const manualBtn = e.target.closest('.line-manual-toggle');
+  if(manualBtn){
+    const idx = Number(manualBtn.dataset.idx);
+    const line = formLines[idx];
+    if(!line.manual) line.ivaOverride = Math.round(calcIVA(line.monto, line.rate));
+    line.manual = !line.manual;
+    renderLines();
+    return;
+  }
+  const removeBtn = e.target.closest('.line-remove');
+  if(removeBtn){
+    const idx = Number(removeBtn.dataset.idx);
+    formLines.splice(idx,1);
+    renderLines();
+    return;
+  }
 });
-elIvaInput.addEventListener('input', recalc);
 
-function calcIVAforCurrent(){ return calcIVA(elMonto.value, currentRate); }
+elLinesContainer.addEventListener('input', e=>{
+  const idx = e.target.dataset.idx;
+  if(idx==null) return;
+  const i = Number(idx);
+  if(e.target.classList.contains('line-monto')){
+    formLines[i].monto = e.target.value;
+    updateLineCalcDisplay(i);
+  } else if(e.target.classList.contains('line-iva-input')){
+    formLines[i].ivaOverride = e.target.value;
+    updateLineCalcDisplay(i);
+  }
+});
 
-function recalc(){
-  const monto = Number(elMonto.value)||0;
-  let iva;
-  if(manualIva){ iva = Number(elIvaInput.value)||0; }
-  else { iva = calcIVAforCurrent(); }
-  const gravada = monto - iva;
-  elGravadaDisplay.textContent = fmtGs(gravada);
-  elIvaDisplay.textContent = fmtGs(iva);
+document.getElementById('btn-add-line').addEventListener('click', ()=>{
+  const used = formLines.map(l=>l.rate);
+  const candidates = [10,5,0].filter(r=>!used.includes(r));
+  formLines.push({ rate: candidates.length?candidates[0]:10, monto:'', manual:false, ivaOverride:0 });
+  renderLines();
+});
+
+renderLines();
+
+/* ---------- Razón social suggestions (custom dropdown — datalist is unreliable on Android Chrome) ---------- */
+function currentPlacesArr(){ return currentTipo==='ingreso' ? placesIn : placesOut; }
+function hideLugarSuggestions(){ elLugarBox.classList.add('hidden'); elLugarBox.innerHTML=''; }
+function renderLugarSuggestions(){
+  const q = elLugar.value.trim().toLowerCase();
+  const arr = currentPlacesArr();
+  const matches = q ? arr.filter(p=>p.toLowerCase().includes(q)).slice(0,8) : arr.slice(0,8);
+  if(!matches.length){ hideLugarSuggestions(); return; }
+  elLugarBox.innerHTML = matches.map(p=>`<div class="suggestion-item" data-value="${escapeHtml(p)}">${escapeHtml(p)}</div>`).join('');
+  elLugarBox.classList.remove('hidden');
 }
-recalc();
-
-function populateLugaresList(){
-  const arr = currentTipo==='ingreso' ? placesIn : placesOut;
-  elLugaresList.innerHTML = arr.map(p=>`<option value="${escapeHtml(p)}">`).join('');
-}
-populateLugaresList();
+elLugar.addEventListener('input', renderLugarSuggestions);
+elLugar.addEventListener('focus', renderLugarSuggestions);
+elLugarBox.addEventListener('click', e=>{
+  const item = e.target.closest('.suggestion-item'); if(!item) return;
+  elLugar.value = item.dataset.value;
+  hideLugarSuggestions();
+});
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#entry-lugar') && !e.target.closest('#lugar-suggestions')) hideLugarSuggestions();
+});
 
 function addPlace(type, name){
   name = (name||'').trim(); if(!name) return;
@@ -634,9 +728,13 @@ function addPlace(type, name){
 
 document.getElementById('form-entry').addEventListener('submit', e=>{
   e.preventDefault();
-  const monto = Number(elMonto.value)||0;
-  const iva = manualIva ? (Number(elIvaInput.value)||0) : calcIVAforCurrent();
-  const gravada = monto - iva;
+  const lines = formLines.map(l=>({
+    rate: l.rate,
+    monto: Number(l.monto)||0,
+    iva: lineIva(l),
+    manual: l.rate===0 ? false : !!l.manual
+  })).filter(l=>l.monto>0);
+  if(!lines.length){ toast('Ingresá al menos un monto'); return; }
   const data = {
     id: editingId || uid(),
     type: currentTipo,
@@ -644,7 +742,7 @@ document.getElementById('form-entry').addEventListener('submit', e=>{
     place: elLugar.value.trim(),
     desc: elDesc.value.trim(),
     factura: elFactura.value.trim(),
-    monto, rate: currentRate, iva, gravada, manual: manualIva
+    lines
   };
   if(editingId){
     const idx = tx.findIndex(t=>t.id===editingId);
@@ -654,7 +752,6 @@ document.getElementById('form-entry').addEventListener('submit', e=>{
   }
   saveTx();
   addPlace(currentTipo, data.place);
-  populateLugaresList();
   toast(editingId? 'Registro actualizado' : 'Registro guardado');
   resetForm();
   renderRegistroList();
@@ -676,47 +773,30 @@ function resetForm(){
   editingId = null;
   document.getElementById('form-entry').reset();
   elFecha.value = todayStr();
-  currentTipo = 'ingreso';
-  currentRate = 10;
-  manualIva = false;
-  document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.tipo==='ingreso'));
-  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.rate==='10'));
-  elLugarLabel.textContent = 'Cliente / lugar';
-  elIvaInput.classList.add('hidden');
-  elIvaDisplay.classList.remove('hidden');
-  document.getElementById('btn-manual-iva').textContent = 'editar';
+  currentTipo = 'egreso';
+  document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.tipo==='egreso'));
+  elLugarLabel.textContent = 'Proveedor / lugar';
+  hideLugarSuggestions();
+  formLines = [{ rate:10, monto:'', manual:false, ivaOverride:0 }];
+  renderLines();
   elBtnEliminar.classList.add('hidden');
   elBtnCancelar.classList.add('hidden');
   elBtnGuardar.textContent = 'Guardar';
-  populateLugaresList();
-  recalc();
 }
 
 function loadIntoForm(t){
   editingId = t.id;
   currentTipo = t.type;
-  currentRate = t.rate;
-  manualIva = !!t.manual;
   document.querySelectorAll('#tipo-toggle .seg-btn').forEach(b=>b.classList.toggle('active', b.dataset.tipo===t.type));
-  document.querySelectorAll('#rate-toggle .seg-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.rate)===t.rate));
   elLugarLabel.textContent = t.type==='ingreso' ? 'Cliente / lugar' : 'Proveedor / lugar';
-  populateLugaresList();
+  hideLugarSuggestions();
   elFecha.value = t.date;
   elLugar.value = t.place;
   elDesc.value = t.desc||'';
   elFactura.value = t.factura||'';
-  elMonto.value = t.monto;
-  if(manualIva){
-    elIvaInput.value = Math.round(t.iva);
-    elIvaInput.classList.remove('hidden');
-    elIvaDisplay.classList.add('hidden');
-    document.getElementById('btn-manual-iva').textContent = 'auto';
-  } else {
-    elIvaInput.classList.add('hidden');
-    elIvaDisplay.classList.remove('hidden');
-    document.getElementById('btn-manual-iva').textContent = 'editar';
-  }
-  recalc();
+  formLines = (t.lines||[]).map(l=>({ rate:l.rate, monto:l.monto, manual: l.rate===0?false:!!l.manual, ivaOverride: Math.round(l.iva)||0 }));
+  if(!formLines.length) formLines = [{ rate:10, monto:'', manual:false, ivaOverride:0 }];
+  renderLines();
   elBtnEliminar.classList.remove('hidden');
   elBtnCancelar.classList.remove('hidden');
   elBtnGuardar.textContent = 'Guardar cambios';
@@ -739,19 +819,22 @@ function renderRegistroList(){
     container.innerHTML = `<div class="empty-state">Sin registros en ${periodLabel(period)}.<br>Agregá un ingreso o egreso arriba.</div>`;
     return;
   }
-  container.innerHTML = list.map(t=>`
+  container.innerHTML = list.map(t=>{
+    const monto = txMonto(t), iva = txIva(t);
+    const badge = (t.lines||[]).map(l=> rateLabelText(l.rate) + (l.manual?'*':'') ).join(' + ');
+    return `
     <div class="ledger-row ${t.type}" data-id="${t.id}">
       <div class="row-main">
         <span class="row-date">${dateShort(t.date)}</span>
         <span class="row-place">${escapeHtml(t.place)}</span>
-        <span class="badge">${t.rate===0?'Exenta':t.rate+'%'}${t.manual?' · manual':''}</span>
+        <span class="badge">${badge}</span>
       </div>
       <div class="row-amounts">
-        <span class="num row-monto">${fmtGs(t.monto)}</span>
-        <span class="num row-iva">IVA ${fmtGs(t.iva)}</span>
+        <span class="num row-monto">${fmtGs(monto)}</span>
+        <span class="num row-iva">IVA ${fmtGs(iva)}</span>
       </div>
     </div>
-  `).join('');
+  `;}).join('');
   container.querySelectorAll('.ledger-row').forEach(row=>{
     row.addEventListener('click', ()=>{
       const t = tx.find(x=>x.id===row.dataset.id);
@@ -1007,8 +1090,9 @@ document.getElementById('input-import-json').addEventListener('change', e=>{
       pagosIVA = data.pagosIVA || [];
       contador = data.contador || { fee:0, entries:{} };
       settings = data.settings || {};
+      migrateTx();
       saveTx(); savePlaces(); savePagos(); saveContador(); saveSettings();
-      populateLugaresList(); populateAnioSelect();
+      populateAnioSelect();
       elContadorFee.value = contador.fee || '';
       renderRegistroList(); renderResumen(); renderImpuestos(); renderContador();
       toast('Respaldo importado correctamente');
@@ -1023,9 +1107,12 @@ document.getElementById('input-import-json').addEventListener('change', e=>{
 
 document.getElementById('btn-export-csv').addEventListener('click', ()=>{
   const header = ['Fecha','Tipo','Lugar','Descripcion','Factura','Monto','Tasa','Gravada','IVA'];
-  const rows = tx.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(t=>[
-    t.date, t.type, t.place, t.desc||'', t.factura||'', Math.round(t.monto), (t.rate===0?'Exenta':t.rate+'%'), Math.round(t.gravada), Math.round(t.iva)
-  ]);
+  const rows = [];
+  tx.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
+    (t.lines||[]).forEach(l=>{
+      rows.push([t.date, t.type, t.place, t.desc||'', t.factura||'', Math.round(l.monto), rateLabelText(l.rate), Math.round((Number(l.monto)||0)-(Number(l.iva)||0)), Math.round(l.iva)]);
+    });
+  });
   const csvEscape = v => { v=String(v); return /[",\n;]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
   const csv = [header, ...rows].map(r=>r.map(csvEscape).join(';')).join('\n');
   downloadBlob('\uFEFF'+csv, `libro-iva-registro-${timestampForFile()}.csv`, 'text/csv;charset=utf-8');
@@ -1037,7 +1124,7 @@ document.getElementById('btn-clear-all').addEventListener('click', ()=>{
     if(confirm('Última confirmación: no hay forma de recuperar estos datos salvo que tengas un respaldo .json. ¿Borrar todo?')){
       tx=[]; placesIn=[]; placesOut=[]; pagosIVA=[]; contador={fee:0,entries:{}}; settings={};
       saveTx(); savePlaces(); savePagos(); saveContador(); saveSettings();
-      populateLugaresList(); populateAnioSelect();
+      populateAnioSelect();
       elContadorFee.value = '';
       renderRegistroList(); renderResumen(); renderImpuestos(); renderContador();
       toast('Datos borrados');

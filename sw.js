@@ -1,6 +1,6 @@
 // Bump CACHE_VERSION every time index.html (or any cached file) changes,
 // otherwise installed users will keep seeing the old cached version.
-const CACHE_VERSION = 'libro-iva-v1';
+const CACHE_VERSION = 'libro-iva-v2';
 
 const ASSETS = [
   './',
