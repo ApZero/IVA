@@ -1162,6 +1162,24 @@ if('serviceWorker' in navigator){
 renderRegistroList();
 renderResumen();
 
+/* Auto-backup: once per calendar day, download a .json backup silently.
+   Skips if there are no transactions yet (nothing worth backing up).
+   The date is stored in settings so it survives page refreshes within the same day. */
+(function autoBackup(){
+  if(!tx.length) return;                        // nothing to back up yet
+  const today = todayStr();
+  if(settings.lastAutoBackup === today) return; // already ran today
+  settings.lastAutoBackup = today;
+  saveSettings();
+  const backup = { app:'libro-iva', version:1, exportedAt: new Date().toISOString(), tx, placesIn, placesOut, pagosIVA, contador, settings };
+  const json   = JSON.stringify(backup, null, 2);
+  // Small delay so the page finishes rendering before the download dialog appears
+  setTimeout(()=>{
+    downloadBlob(json, `libro-iva-auto-${today}.json`, 'application/json');
+    toast('Respaldo automático descargado');
+  }, 1200);
+})();
+
 })();
 </script>
 </body>
